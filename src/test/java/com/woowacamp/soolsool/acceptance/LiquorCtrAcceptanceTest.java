@@ -8,7 +8,6 @@ import com.woowacamp.soolsool.acceptance.fixture.RestLiquorCtrFixture;
 import com.woowacamp.soolsool.acceptance.fixture.RestLiquorFixture;
 import com.woowacamp.soolsool.acceptance.fixture.RestMemberFixture;
 import com.woowacamp.soolsool.core.liquor.dto.liquorCtr.LiquorCtrDetailResponse;
-import com.woowacamp.soolsool.core.liquor.infra.RedisLiquorCtr;
 import io.restassured.RestAssured;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -21,7 +20,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 @DisplayName("인수 테스트: /liquor-ctr")
 class LiquorCtrAcceptanceTest extends AcceptanceTest {
 
-    private static final String LIQUOR_CTR_KEY = "LIQUOR_CTR";
+    private static final String LIQUOR_CTR_IMPRESSION_PREFIX = "LIQUOR_CTR_IMPRESSION:";
+    private static final String LIQUOR_CTR_CLICK_PREFIX = "LIQUOR_CTR_CLICK:";
 
     Long 새로;
 
@@ -35,13 +35,17 @@ class LiquorCtrAcceptanceTest extends AcceptanceTest {
         String 최민족_토큰 = RestAuthFixture.로그인_최민족_판매자();
         새로 = RestLiquorFixture.술_등록_새로_판매중(최민족_토큰);
 
-        redissonClient.getMapCache(LIQUOR_CTR_KEY)
-            .put(새로, new RedisLiquorCtr(0L, 0L));
+        initRedis();
     }
 
     @AfterEach
     void setOffRedis() {
-        redissonClient.getMapCache(LIQUOR_CTR_KEY).clear();
+        initRedis();
+    }
+
+    void initRedis() {
+        redissonClient.getAtomicLong(LIQUOR_CTR_IMPRESSION_PREFIX + 새로).set(0L);
+        redissonClient.getAtomicLong(LIQUOR_CTR_CLICK_PREFIX + 새로).set(0L);
     }
 
     @Test

@@ -3,7 +3,6 @@ package com.woowacamp.soolsool.core.liquor.repository.redisson;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.woowacamp.soolsool.config.RedisTestConfig;
-import com.woowacamp.soolsool.core.liquor.infra.RedisLiquorCtr;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -22,7 +21,8 @@ import org.springframework.test.context.jdbc.Sql;
 @DisplayName("통합 테스트 : LiquorCtrRedisRepository")
 class LiquorCtrRedisRepositoryTest {
 
-    private static final String LIQUOR_CTR_KEY = "LIQUOR_CTR";
+    private static final String LIQUOR_CTR_IMPRESSION_PREFIX = "LIQUOR_CTR_IMPRESSION:";
+    private static final String LIQUOR_CTR_CLICK_PREFIX = "LIQUOR_CTR_CLICK:";
     private static final Long TARGET_LIQUOR = 1L;
 
     @Autowired
@@ -33,8 +33,13 @@ class LiquorCtrRedisRepositoryTest {
 
     @BeforeEach
     @AfterEach
-    void setRedisLiquorCtr() {
-        redissonClient.getMapCache(LIQUOR_CTR_KEY).clear();
+    void initRedisLiquorCtr() {
+        setRedisLiquorCtr(0L, 0L);
+    }
+
+    void setRedisLiquorCtr(Long impression, Long click) {
+        redissonClient.getAtomicLong(LIQUOR_CTR_IMPRESSION_PREFIX + TARGET_LIQUOR).set(impression);
+        redissonClient.getAtomicLong(LIQUOR_CTR_CLICK_PREFIX + TARGET_LIQUOR).set(click);
     }
 
     @Test
@@ -42,21 +47,7 @@ class LiquorCtrRedisRepositoryTest {
     @DisplayName("클릭율을 조회한다.")
     void getCtr() {
         // given
-        redissonClient.getMapCache(LIQUOR_CTR_KEY)
-            .put(TARGET_LIQUOR, new RedisLiquorCtr(2L, 1L));
-
-        // when
-        double ctr = liquorCtrRedisRepository.getCtr(TARGET_LIQUOR);
-
-        // then
-        assertThat(ctr).isEqualTo(0.5);
-    }
-
-    @Test
-    @Sql({"/liquor-type.sql", "/liquor.sql", "/liquor-ctr.sql"})
-    @DisplayName("Redis에 Ctr 정보가 존재하지 않을 경우 DB를 조회해 Redis에 반영한다.")
-    void synchronizeWithDatabase() {
-        // given
+        setRedisLiquorCtr(2L, 1L);
 
         // when
         double ctr = liquorCtrRedisRepository.getCtr(TARGET_LIQUOR);
@@ -69,8 +60,7 @@ class LiquorCtrRedisRepositoryTest {
     @DisplayName("노출수를 1 증가시킨다.")
     void updateImpression() {
         // given
-        redissonClient.getMapCache(LIQUOR_CTR_KEY)
-            .put(TARGET_LIQUOR, new RedisLiquorCtr(1L, 1L));
+        setRedisLiquorCtr(1L, 1L);
 
         // when
         liquorCtrRedisRepository.increaseImpression(TARGET_LIQUOR);
@@ -84,8 +74,7 @@ class LiquorCtrRedisRepositoryTest {
     @DisplayName("멀티 쓰레드를 사용해 노출수를 50 증가시킨다.")
     void updateImpressionByMultiThread() throws InterruptedException {
         // given
-        redissonClient.getMapCache(LIQUOR_CTR_KEY)
-            .put(TARGET_LIQUOR, new RedisLiquorCtr(50L, 50L));
+        setRedisLiquorCtr(50L, 50L);
 
         int threadCount = 50;
         ExecutorService executor = Executors.newFixedThreadPool(threadCount);
@@ -109,8 +98,7 @@ class LiquorCtrRedisRepositoryTest {
     @DisplayName("클릭수를 1 증가시킨다.")
     void updateClick() {
         // given
-        redissonClient.getMapCache(LIQUOR_CTR_KEY)
-            .put(TARGET_LIQUOR, new RedisLiquorCtr(1L, 0L));
+        setRedisLiquorCtr(2L, 1L);
 
         // when
         liquorCtrRedisRepository.increaseClick(TARGET_LIQUOR);
@@ -124,8 +112,7 @@ class LiquorCtrRedisRepositoryTest {
     @DisplayName("멀티 쓰레드를 사용해 클릭수를 50 증가시킨다.")
     void updateClickByMultiThread() throws InterruptedException {
         // given
-        redissonClient.getMapCache(LIQUOR_CTR_KEY)
-            .put(TARGET_LIQUOR, new RedisLiquorCtr(50L, 0L));
+        setRedisLiquorCtr(50L, 0L);
 
         int threadCount = 50;
         ExecutorService executor = Executors.newFixedThreadPool(threadCount);
