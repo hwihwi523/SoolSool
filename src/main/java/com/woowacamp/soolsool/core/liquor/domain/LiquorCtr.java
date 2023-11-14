@@ -57,6 +57,11 @@ public class LiquorCtr extends BaseEntity {
         this.click = new LiquorCtrClick(click);
     }
 
+    public void updateCtr(final LiquorCtr other) {
+        this.impression = new LiquorCtrImpression(other.getImpression());
+        this.click = new LiquorCtrClick(other.getClick());
+    }
+
     public double getCtr() {
         if (impression.getImpression() == 0) {
             throw new SoolSoolException(LiquorCtrErrorCode.DIVIDE_BY_ZERO_IMPRESSION);

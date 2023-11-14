@@ -3,13 +3,17 @@ package com.woowacamp.soolsool.core.liquor.repository.redisson;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.woowacamp.soolsool.config.RedisTestConfig;
+import com.woowacamp.soolsool.core.liquor.domain.LiquorCtr;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.redisson.api.RSet;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -21,6 +25,7 @@ import org.springframework.test.context.jdbc.Sql;
 @DisplayName("통합 테스트 : LiquorCtrRedisRepository")
 class LiquorCtrRedisRepositoryTest {
 
+    private static final String LIQUOR_CTR_LATEST_UPDATED = "LIQUOR_CTR_LATEST_UPDATED";
     private static final String LIQUOR_CTR_IMPRESSION_PREFIX = "LIQUOR_CTR_IMPRESSION:";
     private static final String LIQUOR_CTR_CLICK_PREFIX = "LIQUOR_CTR_CLICK:";
     private static final Long TARGET_LIQUOR = 1L;
@@ -40,6 +45,32 @@ class LiquorCtrRedisRepositoryTest {
     void setRedisLiquorCtr(Long impression, Long click) {
         redissonClient.getAtomicLong(LIQUOR_CTR_IMPRESSION_PREFIX + TARGET_LIQUOR).set(impression);
         redissonClient.getAtomicLong(LIQUOR_CTR_CLICK_PREFIX + TARGET_LIQUOR).set(click);
+    }
+
+    void initLatestUpdatedLiquorIds() {
+        redissonClient.getSet(LIQUOR_CTR_LATEST_UPDATED).clear();
+    }
+
+    List<Long> getLatestUpdatedLiquorIds() {
+        RSet<Long> liquorIds = redissonClient.getSet(LIQUOR_CTR_LATEST_UPDATED);
+
+        return liquorIds.stream().collect(Collectors.toUnmodifiableList());
+    }
+
+    @Test
+    @DisplayName("Redis에 저장된 특정 술의 노출수, 클릭수를 조회한다.")
+    void getLiquorCtr() {
+        // given
+        long impression = 1L;
+        long click = 1L;
+        setRedisLiquorCtr(impression, click);
+
+        // when
+        LiquorCtr liquorCtr = liquorCtrRedisRepository.getLiquorCtr(TARGET_LIQUOR);
+
+        // then
+        assertThat(liquorCtr.getImpression()).isEqualTo(impression);
+        assertThat(liquorCtr.getClick()).isEqualTo(click);
     }
 
     @Test
@@ -95,6 +126,20 @@ class LiquorCtrRedisRepositoryTest {
     }
 
     @Test
+    @DisplayName("노출수를 증가시키면 최근 갱신된 술 Set에 해당 술의 id를 추가한다.")
+    void increaseImpressionAndAddLiquorId() {
+        // given
+        initLatestUpdatedLiquorIds();
+
+        // when
+        liquorCtrRedisRepository.increaseImpression(TARGET_LIQUOR);
+
+        // then
+        List<Long> latestUpdatedLiquorIds = getLatestUpdatedLiquorIds();
+        assertThat(latestUpdatedLiquorIds).containsExactly(TARGET_LIQUOR);
+    }
+
+    @Test
     @DisplayName("클릭수를 1 증가시킨다.")
     void updateClick() {
         // given
@@ -130,5 +175,34 @@ class LiquorCtrRedisRepositoryTest {
         // then
         double ctr = liquorCtrRedisRepository.getCtr(TARGET_LIQUOR);
         assertThat(ctr).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("클릭수를 증가시키면 최근 갱신된 술 Set에 해당 술의 id를 추가한다.")
+    void increaseClickAndAddLiquorId() {
+        // given
+        initLatestUpdatedLiquorIds();
+
+        // when
+        liquorCtrRedisRepository.increaseClick(TARGET_LIQUOR);
+
+        // then
+        List<Long> latestUpdatedLiquorIds = getLatestUpdatedLiquorIds();
+        assertThat(latestUpdatedLiquorIds).containsExactly(TARGET_LIQUOR);
+    }
+
+    @Test
+    @DisplayName("최근 갱신된 술 id 목록을 가져온 뒤 해당 Set을 초기화한다.")
+    void getAndClearLatestUpdatedLiquorIds() {
+        // given
+        initLatestUpdatedLiquorIds();
+        liquorCtrRedisRepository.increaseClick(TARGET_LIQUOR);
+
+        // when
+        List<Long> liquorIds = liquorCtrRedisRepository.getAndClearLatestUpdatedLiquorIds();
+
+        // then
+        assertThat(liquorIds).containsExactly(TARGET_LIQUOR);
+        assertThat(getLatestUpdatedLiquorIds()).isEmpty();
     }
 }
