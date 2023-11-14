@@ -3,9 +3,11 @@ package com.woowacamp.soolsool.core.liquor.domain.vo;
 import com.woowacamp.soolsool.core.liquor.code.LiquorCtrErrorCode;
 import com.woowacamp.soolsool.global.exception.SoolSoolException;
 import java.util.Objects;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 @Getter
+@EqualsAndHashCode
 public class LiquorCtrImpression {
 
     private final Long impression;
@@ -27,9 +29,5 @@ public class LiquorCtrImpression {
         if (impression < 0) {
             throw new SoolSoolException(LiquorCtrErrorCode.INVALID_SIZE_IMPRESSION);
         }
-    }
-
-    public LiquorCtrImpression increaseOne() {
-        return new LiquorCtrImpression(this.impression + 1);
     }
 }

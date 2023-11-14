@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.woowacamp.soolsool.config.RedisTestConfig;
 import com.woowacamp.soolsool.core.liquor.dto.liquorCtr.LiquorClickAddRequest;
 import com.woowacamp.soolsool.core.liquor.dto.liquorCtr.LiquorImpressionAddRequest;
-import com.woowacamp.soolsool.core.liquor.infra.RedisLiquorCtr;
 import com.woowacamp.soolsool.core.liquor.repository.redisson.LiquorCtrRedisRepository;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -23,7 +22,9 @@ import org.springframework.test.context.jdbc.Sql;
 @DisplayName("통합 테스트: LiquorCtrService")
 class LiquorCtrServiceIntegrationTest {
 
-    private static final String LIQUOR_CTR_KEY = "LIQUOR_CTR";
+    private static final String LIQUOR_CTR_IMPRESSION_PREFIX = "LIQUOR_CTR_IMPRESSION:";
+    private static final String LIQUOR_CTR_CLICK_PREFIX = "LIQUOR_CTR_CLICK:";
+    private static final Long TARGET_LIQUOR = 1L;
 
     @Autowired
     LiquorCtrService liquorCtrService;
@@ -33,8 +34,13 @@ class LiquorCtrServiceIntegrationTest {
 
     @BeforeEach
     @AfterEach
-    void setRedisLiquorCtr() {
-        redissonClient.getMapCache(LIQUOR_CTR_KEY).clear();
+    void initRedisLiquorCtr() {
+        setRedisLiquorCtr(0L, 0L);
+    }
+
+    void setRedisLiquorCtr(Long impression, Long click) {
+        redissonClient.getAtomicLong(LIQUOR_CTR_IMPRESSION_PREFIX + TARGET_LIQUOR).set(impression);
+        redissonClient.getAtomicLong(LIQUOR_CTR_CLICK_PREFIX + TARGET_LIQUOR).set(click);
     }
 
     @Test
@@ -42,15 +48,12 @@ class LiquorCtrServiceIntegrationTest {
     @DisplayName("클릭율을 조회한다.")
     void getLiquorCtrByByLiquorId() {
         // given
-        long liquorId = 1L;
-
         long impression = 1L;
         long click = 1L;
-        redissonClient.getMapCache(LIQUOR_CTR_KEY)
-            .put(liquorId, new RedisLiquorCtr(impression, click));
+        setRedisLiquorCtr(impression, click);
 
         // when
-        double ctr = liquorCtrService.getLiquorCtrByLiquorId(liquorId);
+        double ctr = liquorCtrService.getLiquorCtrByLiquorId(TARGET_LIQUOR);
 
         // then
         assertThat(ctr).isEqualTo(getExpectedCtr(impression, click));
@@ -61,19 +64,17 @@ class LiquorCtrServiceIntegrationTest {
     @DisplayName("노출수를 증가시킨다.")
     void increaseImpression() {
         // given
-        long liquorId = 1L;
-        LiquorImpressionAddRequest request = new LiquorImpressionAddRequest(List.of(liquorId));
+        LiquorImpressionAddRequest request = new LiquorImpressionAddRequest(List.of(TARGET_LIQUOR));
 
         long impression = 1L;
         long click = 1L;
-        redissonClient.getMapCache(LIQUOR_CTR_KEY)
-            .put(liquorId, new RedisLiquorCtr(impression, click));
+        setRedisLiquorCtr(impression, click);
 
         // when
         liquorCtrService.increaseImpression(request);
 
         // then
-        double ctr = liquorCtrService.getLiquorCtrByLiquorId(liquorId);
+        double ctr = liquorCtrService.getLiquorCtrByLiquorId(TARGET_LIQUOR);
         assertThat(ctr).isEqualTo(getExpectedCtr(impression + 1, click));
     }
 
@@ -82,19 +83,17 @@ class LiquorCtrServiceIntegrationTest {
     @DisplayName("클릭수를 증가시킨다.")
     void increaseClick() {
         // given
-        long liquorId = 1L;
-        LiquorClickAddRequest request = new LiquorClickAddRequest(liquorId);
+        LiquorClickAddRequest request = new LiquorClickAddRequest(TARGET_LIQUOR);
 
         long impression = 2L;
         long click = 1L;
-        redissonClient.getMapCache(LIQUOR_CTR_KEY)
-            .put(liquorId, new RedisLiquorCtr(impression, click));
+        setRedisLiquorCtr(impression, click);
 
         // when
         liquorCtrService.increaseClick(request);
 
         // then
-        double ctr = liquorCtrService.getLiquorCtrByLiquorId(liquorId);
+        double ctr = liquorCtrService.getLiquorCtrByLiquorId(TARGET_LIQUOR);
         assertThat(ctr).isEqualTo(getExpectedCtr(impression, click + 1));
     }
 
